@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lista de Compras por Voz</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --primary:#1f4e79; --primary-dark:#163a58;
+    --accent:#2e9e5b; --danger:#c0392b; --muted:#6b7280; --border:#e2e5e9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family: Arial, Helvetica, sans-serif; background:var(--bg); margin:0; padding:20px;
+    color:#1f2937;
+  }
+  .wrap{max-width:820px; margin:0 auto;}
+  h1{text-align:center; color:var(--primary); margin-bottom:4px;}
+  .subtitle{text-align:center; color:var(--muted); margin-top:0; margin-bottom:20px; font-size:14px;}
+  .card{background:var(--card); border-radius:12px; padding:20px; margin-bottom:18px; box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+  .mic-row{display:flex; flex-direction:column; align-items:center; gap:10px;}
+  #micBtn{
+    width:84px; height:84px; border-radius:50%; border:none; cursor:pointer;
+    background:var(--primary); color:white; font-size:32px; display:flex; align-items:center; justify-content:center;
+    transition: background .2s, transform .1s;
+  }
+  #micBtn:hover{background:var(--primary-dark);}
+  #micBtn.listening{background:var(--danger); animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(192,57,43,.5);}70%{box-shadow:0 0 0 18px rgba(192,57,43,0);}100%{box-shadow:0 0 0 0 rgba(192,57,43,0);}}
+  #status{font-size:14px; color:var(--muted); min-height:18px;}
+  #transcript{
+    width:100%; min-height:22px; text-align:center; font-size:15px; color:#111827;
+    background:#f8fafc; border:1px dashed var(--border); border-radius:8px; padding:8px 12px;
+  }
+  select#langSelect{margin-top:4px; padding:4px 8px; border-radius:6px; border:1px solid var(--border);}
+  .row{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;}
+  h2{color:var(--primary); font-size:18px; margin-top:0;}
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th, td{padding:8px 6px; border-bottom:1px solid var(--border); text-align:left;}
+  th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase;}
+  input[type=text], input[type=number], select{
+    padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:14px; width:100%;
+  }
+  td.qty{width:80px;} td.unit{width:130px;} td.store{width:120px;} td.actions{width:40px; text-align:center;}
+  .badge{display:inline-block; font-size:11px; background:#eef2f7; color:var(--primary); padding:2px 8px; border-radius:10px; margin-left:6px;}
+  button.icon{background:none; border:none; cursor:pointer; font-size:16px; padding:4px;}
+  button.icon:hover{opacity:.7;}
+  .actions-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;}
+  .btn{padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:white; cursor:pointer; font-size:13px; color:#1f2937;}
+  .btn:hover{background:#f1f5f9;}
+  .btn.primary{background:var(--primary); color:white; border-color:var(--primary);}
+  .btn.primary:hover{background:var(--primary-dark);}
+  .empty{color:var(--muted); font-size:14px; text-align:center; padding:16px 0;}
+  form#addForm{display:grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap:8px; align-items:end;}
+  form#addForm label{font-size:11px; color:var(--muted); display:block; margin-bottom:2px;}
+  .examples{font-size:13px; color:var(--muted); line-height:1.7;}
+  .examples code{background:#eef2f7; padding:1px 6px; border-radius:4px; color:var(--primary);}
+  .history-week{border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px;}
+  .history-week h3{margin:0 0 8px 0; font-size:14px; color:var(--primary);}
+  .history-item{display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:13px; border-bottom:1px dashed var(--border);}
+  .history-item:last-child{border-bottom:none;}
+  #toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:#1f2937; color:white; padding:10px 16px; border-radius:8px; font-size:14px;
+    display:none; align-items:center; gap:12px; z-index:50;
+  }
+  #toast button{background:none; border:none; color:#8ecdf7; cursor:pointer; font-size:13px;}
+  @media (max-width:600px){
+    form#addForm{grid-template-columns:1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛒 Lista de Compras por Voz</h1>
+  <p class="subtitle">Dicta lo que necesitas comprar cada semana en Plaza Vea, Tottus y demás tiendas. Agrega, quita y modifica productos hablando.</p>
+
+  <div class="card">
+    <div class="mic-row">
+      <button id="micBtn" title="Activar micrófono">🎤</button>
+      <div id="status">Toca el micrófono y habla</div>
+      <div id="transcript"></div>
+      <div>
+        <label for="langSelect" style="font-size:12px; color:var(--muted);">Acento / idioma:</label>
+        <select id="langSelect">
+          <option value="es-PE">Español (Perú)</option>
+          <option value="es-419">Español (Latinoamérica)</option>
+          <option value="es-CL">Español (Chile)</option>
+          <option value="es-MX">Español (México)</option>
+          <option value="es-ES">Español (España)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card examples">
+    <strong>Ejemplos de lo que puedes decir:</strong><br>
+    <code>agrega 2 kilos de arroz</code> &nbsp;
+    <code>añadir 1 litro de leche en Plaza Vea</code> &nbsp;
+    <code>quitar leche</code> &nbsp;
+    <code>cambiar arroz a 5 kilos</code> &nbsp;
+    <code>leer la lista</code> &nbsp;
+    <code>vaciar lista</code> &nbsp;
+    <code>nueva semana</code> &nbsp;
+    <code>repetir semana pasada</code>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <h2>Mi lista <span id="itemCount" class="badge">0</span></h2>
+    </div>
+    <div id="listContainer"></div>
+    <div class="actions-row">
+      <button class="btn" id="readBtn">🔊 Leer lista</button>
+      <button class="btn" id="copyBtn">📋 Copiar lista</button>
+      <button class="btn" id="newWeekBtn">📅 Nueva semana</button>
+      <button class="btn" id="clearBtn">🗑️ Vaciar lista</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Agregar manualmente</h2>
+    <form id="addForm">
+      <div>
+        <label>Producto</label>
+        <input type="text" id="mProduct" placeholder="Ej. Arroz" required>
+      </div>
+      <div>
+        <label>Cantidad</label>
+        <input type="number" id="mQty" value="1" min="0" step="any">
+      </div>
+      <div>
+        <label>Unidad</label>
+        <select id="mUnit"></select>
+      </div>
+      <div>
+        <label>Tienda</label>
+        <select id="mStore">
+          <option value="">—</option>
+          <option>Plaza Vea</option>
+          <option>Tottus</option>
+          <option>Metro</option>
+          <option>Wong</option>
+          <option>Vivanda</option>
+          <option>Makro</option>
+          <option>Otra</option>
+        </select>
+      </div>
+      <button type="submit" class="btn primary">Agregar</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Historial de semanas anteriores</h2>
+    <div id="historyContainer"></div>
+  </div>
+</div>
+
+<div id="toast"><span id="toastMsg"></span><button id="toastAction"></button></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const UNITS = ["kg","g","L","ml","paquete(s)","unidad(es)","docena(s)","botella(s)","lata(s)","caja(s)","bolsa(s)","frasco(s)","barra(s)","pan(es)","pieza(s)","tarro(s)"];
+  const STORE_KEYWORDS = ["plaza vea","tottus","metro","wong","vivanda","makro","mass","tambo"];
+
+  const STORAGE_ITEMS = "voiceShoppingList.items";
+  const STORAGE_HISTORY = "voiceShoppingList.history";
+  const STORAGE_LANG = "voiceShoppingList.lang";
+
+  let items = loadJSON(STORAGE_ITEMS, []);
+  let history = loadJSON(STORAGE_HISTORY, []);
+  let lastDeleted = null;      // {item, index}
+  let lastClearedList = null;  // full array snapshot
+
+  function loadJSON(key, fallback){
+    try { const v = JSON.parse(localStorage.getItem(key)); return v || fallback; }
+    catch(e){ return fallback; }
+  }
+  function saveItems(){ localStorage.setItem(STORAGE_ITEMS, JSON.stringify(items)); }
+  function saveHistory(){ localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history)); }
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function normalize(str){
+    return (str||"").toString()
+      .normalize("NFD").replace(/[̀-ͯ]/g,"")
+      .toLowerCase().trim();
+  }
+  function titleCase(str){
+    return (str||"").split(" ").filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  }
+  function cleanProduct(str){
+    let s = normalizeSpaces(str);
+    s = s.replace(/^(de |del |la |el |los |las |una |un )+/i, "");
+    s = s.replace(/\s+(por favor|de la lista)$/i, "");
+    return titleCase(s.trim());
+  }
+  function normalizeSpaces(s){ return (s||"").replace(/\s+/g," ").trim(); }
+
+  function normalizeUnit(raw){
+    const u = normalize(raw);
+    if (/^kil/.test(u) || u === "kg") return "kg";
+    if (/^gram/.test(u) || u === "gr" || u === "g") return "g";
+    if (/^litro/.test(u) || u === "lt" || u === "l") return "L";
+    if (u === "ml" || /^mililitro/.test(u)) return "ml";
+    if (/^paquete/.test(u)) return "paquete(s)";
+    if (/^unidad/.test(u)) return "unidad(es)";
+    if (/^docena/.test(u)) return "docena(s)";
+    if (/^botella/.test(u)) return "botella(s)";
+    if (/^lata/.test(u)) return "lata(s)";
+    if (/^caja/.test(u)) return "caja(s)";
+    if (/^bolsa/.test(u)) return "bolsa(s)";
+    if (/^frasco/.test(u)) return "frasco(s)";
+    if (/^barra/.test(u)) return "barra(s)";
+    if (/^pan/.test(u)) return "pan(es)";
+    if (/^pieza/.test(u)) return "pieza(s)";
+    if (/^tarro/.test(u)) return "tarro(s)";
+    return "unidad(es)";
+  }
+
+  const NUM_UNIDADES = {cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,
+    diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,
+    veinte:20,veintiuno:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29};
+  const NUM_DECENAS = {treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90};
+
+  function wordToNumber(text){
+    const t = normalize(text);
+    if (t === "media" || t === "medio") return 0.5;
+    if (NUM_UNIDADES.hasOwnProperty(t)) return NUM_UNIDADES[t];
+    if (NUM_DECENAS.hasOwnProperty(t)) return NUM_DECENAS[t];
+    const m = t.match(/^(treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\s+y\s+(un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)$/);
+    if (m) return NUM_DECENAS[m[1]] + NUM_UNIDADES[m[2]];
+    return null;
+  }
+  function parseQuantity(str){
+    const s = (str||"").trim();
+    const digit = s.match(/^\d+(?:[.,]\d+)?/);
+    if (digit) return parseFloat(digit[0].replace(",", "."));
+    return wordToNumber(s);
+  }
+
+  const UNIT_ALT = "kilos?|kilogramos?|kg|gramos?|gr|g|litros?|lt|ml|mililitros?|paquetes?|unidades?|unidad|docenas?|botellas?|latas?|cajas?|bolsas?|frascos?|barras?|panes?|piezas?|tarros?";
+  const STORE_RE = new RegExp("\\ben\\s+(" + STORE_KEYWORDS.join("|") + ")\\.?$", "i");
+  const QTY_UNIT_RE = new RegExp("^(\\d+(?:[.,]\\d+)?|[a-z]+(?:\\s+y\\s+[a-z]+)?)\\s+(" + UNIT_ALT + ")?\\s*(?:de\\s+)?(.+)$", "i");
+
+  function parseAddPayload(payloadRaw){
+    let payload = normalizeSpaces(payloadRaw);
+    let store = null;
+    const sMatch = payload.match(STORE_RE);
+    if (sMatch){
+      store = titleCase(sMatch[1].replace(/\s+/g," "));
+      payload = payload.slice(0, sMatch.index).trim();
+    }
+    let quantity = 1, unit = "unidad(es)", product = payload;
+    const m = payload.match(QTY_UNIT_RE);
+    if (m){
+      const q = parseQuantity(m[1]);
+      if (q !== null){
+        quantity = q;
+        unit = m[2] ? normalizeUnit(m[2]) : "unidad(es)";
+        product = m[3];
+      }
+    }
+    product = cleanProduct(product);
+    return { quantity, unit, product, store };
+  }
+
+  function findItemIndex(query){
+    const q = normalize(cleanProduct(query));
+    if (!q) return { matches: [] };
+    let matches = items.filter(it => normalize(it.product) === q);
+    if (matches.length === 0){
+      matches = items.filter(it => normalize(it.product).includes(q) || q.includes(normalize(it.product)));
+    }
+    return { matches };
+  }
+
+  // ---------- Core actions ----------
+  function addItem({quantity, unit, product, store}){
+    if (!product){ speak("No entendí qué producto agregar."); return; }
+    const idx = items.findIndex(it => normalize(it.product) === normalize(product) && it.unit === unit);
+    if (idx >= 0){
+      items[idx].quantity = round2(items[idx].quantity + quantity);
+      if (store) items[idx].store = store;
+    } else {
+      items.push({ id: uid(), product, quantity: round2(quantity), unit, store: store || "" });
+    }
+    saveItems(); render();
+    speak(`Agregado: ${quantity} ${unit} de ${product}${store ? " en " + store : ""}.`);
+    toast(`Agregado: ${product}`);
+  }
+
+  function removeByVoice(query){
+    const { matches } = findItemIndex(query);
+    if (matches.length === 1){
+      const item = matches[0];
+      const index = items.findIndex(it => it.id === item.id);
+      items.splice(index, 1);
+      lastDeleted = { item, index };
+      saveItems(); render();
+      speak(`Eliminado ${item.product} de la lista.`);
+      toast(`Eliminado: ${item.product}`, "Deshacer", undoDelete);
+    } else if (matches.length === 0){
+      speak(`No encontré ${query} en la lista.`);
+      toast(`No encontré "${query}" en la lista`);
+    } else {
+      speak(`Hay varios productos parecidos a ${query}. Sé más específico.`);
+      toast(`Varios productos coinciden con "${query}"`);
+    }
+  }
+
+  function modifyByVoice(query, amountStr){
+    const { matches } = findItemIndex(query);
+    if (matches.length !== 1){
+      if (matches.length === 0){ speak(`No encontré ${query} en la lista.`); toast(`No encontré "${query}"`); }
+      else { speak(`Hay varios productos parecidos a ${query}. Sé más específico.`); toast(`Varios productos coinciden con "${query}"`); }
+      return;
+    }
+    const item = matches[0];
+    const amount = normalizeSpaces(amountStr);
+    const m = amount.match(QTY_UNIT_RE) || amount.match(/^(\d+(?:[.,]\d+)?|[a-z]+(?:\s+y\s+[a-z]+)?)\s*$/i);
+    let newQty = parseQuantity(amount);
+    let newUnit = item.unit;
+    if (m && m[2]) newUnit = normalizeUnit(m[2]);
+    if (newQty === null && m) newQty = parseQuantity(m[1]);
+    if (newQty === null){ speak("No entendí la nueva cantidad."); return; }
+    item.quantity = round2(newQty);
+    item.unit = newUnit;
+    saveItems(); render();
+    speak(`Actualizado ${item.product} a ${item.quantity} ${item.unit}.`);
+    toast(`Actualizado: ${item.product}`);
+  }
+
+  function clearList(){
+    if (items.length === 0){ speak("La lista ya está vacía."); return; }
+    lastClearedList = items.slice();
+    items = [];
+    saveItems(); render();
+    speak("Lista vaciada.");
+    toast("Lista vaciada", "Deshacer", undoClear);
+  }
+
+  function archiveWeek(){
+    if (items.length === 0){ speak("La lista está vacía, no hay nada que archivar."); return; }
+    history.unshift({ id: uid(), date: new Date().toISOString(), items: items.slice() });
+    items = [];
+    saveHistory(); saveItems(); render();
+    speak("Semana archivada. Empezando una lista nueva.");
+    toast("Semana guardada en el historial");
+  }
+
+  function repeatLastWeek(){
+    if (history.length === 0){ speak("No hay semanas anteriores guardadas."); return; }
+    const prev = history[0];
+    prev.items.forEach(it => addItemSilent(it));
+    saveItems(); render();
+    speak(`Agregué ${prev.items.length} productos de la semana pasada.`);
+    toast("Productos de la semana pasada agregados");
+  }
+  function addItemSilent({quantity, unit, product, store}){
+    const idx = items.findIndex(it => normalize(it.product) === normalize(product) && it.unit === unit);
+    if (idx >= 0) items[idx].quantity = round2(items[idx].quantity + quantity);
+    else items.push({ id: uid(), product, quantity: round2(quantity), unit, store: store || "" });
+  }
+
+  function readListAloud(){
+    if (items.length === 0){ speak("Tu lista está vacía."); return; }
+    const text = "Tu lista tiene: " + items.map(i => `${i.quantity} ${i.unit} de ${i.product}`).join(", ") + ".";
+    speak(text);
+  }
+
+  function undoDelete(){
+    if (!lastDeleted) return;
+    items.splice(Math.min(lastDeleted.index, items.length), 0, lastDeleted.item);
+    lastDeleted = null;
+    saveItems(); render(); hideToast();
+  }
+  function undoClear(){
+    if (!lastClearedList) return;
+    items = lastClearedList;
+    lastClearedList = null;
+    saveItems(); render(); hideToast();
+  }
+
+  function round2(n){ return Math.round(n * 100) / 100; }
+
+  // ---------- Voice command routing ----------
+  function processCommand(raw){
+    const norm = normalize(raw);
+    if (!norm) return;
+
+    if (/^(vaciar|limpiar|borrar)\s+(toda\s+)?(la\s+)?lista(\s+completa)?$/.test(norm) || norm === "borrar todo"){
+      clearList(); return;
+    }
+    if (/^(nueva semana|archivar semana|guardar semana|empezar semana nueva|cerrar semana)/.test(norm)){
+      archiveWeek(); return;
+    }
+    if (/^(repetir|repite)\s+(la\s+)?(semana\s+)?(pasada|anterior)/.test(norm)){
+      repeatLastWeek(); return;
+    }
+    if (/^(leer|lee|muestra|mostrar|dime)\s+(la\s+)?lista/.test(norm) || /^que tengo en (la )?lista/.test(norm)){
+      readListAloud(); return;
+    }
+    let m = norm.match(/^(?:eliminar|elimina|quitar|quita|borrar|borra|sacar|saca)\s+(.+)$/);
+    if (m){ removeByVoice(m[1]); return; }
+
+    m = raw.match(/^(?:cambiar|cambia|modificar|modifica|actualizar|actualiza)\s+(?:la cantidad de\s+)?(.+?)\s+a\s+(.+)$/i);
+    if (m){ modifyByVoice(m[1], m[2]); return; }
+
+    m = raw.match(/^(?:agregar|agrega|a[ñn]adir|a[ñn]ade|anotar|anota|apuntar|apunta|comprar|compra|necesito|quiero|suma|sumar)\s+(.+)$/i);
+    if (m){ addItem(parseAddPayload(m[1])); return; }
+
+    speak("No entendí el comando, intenta de nuevo.");
+    toast("No reconocí ese comando");
+  }
+
+  // ---------- Speech synthesis ----------
+  function speak(text){
+    if (!("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = document.getElementById("langSelect").value || "es-PE";
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }
+
+  // ---------- Speech recognition ----------
+  const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null, listening = false;
+  const micBtn = document.getElementById("micBtn");
+  const statusEl = document.getElementById("status");
+  const transcriptEl = document.getElementById("transcript");
+  const langSelect = document.getElementById("langSelect");
+  langSelect.value = localStorage.getItem(STORAGE_LANG) || "es-PE";
+  langSelect.addEventListener("change", () => localStorage.setItem(STORAGE_LANG, langSelect.value));
+
+  if (SpeechRecognitionImpl){
+    recognition = new SpeechRecognitionImpl();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => { listening = true; micBtn.classList.add("listening"); statusEl.textContent = "Escuchando..."; };
+    recognition.onerror = (e) => { statusEl.textContent = "Error de reconocimiento: " + e.error; };
+    recognition.onend = () => {
+      if (listening){ try { recognition.start(); } catch(e){} }
+      else { micBtn.classList.remove("listening"); statusEl.textContent = "Toca el micrófono y habla"; }
+    };
+    recognition.onresult = (event) => {
+      let interim = "", final = "";
+      for (let i = event.resultIndex; i < event.results.length; i++){
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) final += t;
+        else interim += t;
+      }
+      transcriptEl.textContent = final || interim;
+      if (final.trim()){ processCommand(final.trim()); }
+    };
+
+    micBtn.addEventListener("click", () => {
+      if (listening){
+        listening = false;
+        recognition.stop();
+      } else {
+        recognition.lang = langSelect.value;
+        transcriptEl.textContent = "";
+        try { recognition.start(); } catch(e){}
+      }
+    });
+  } else {
+    micBtn.disabled = true;
+    statusEl.textContent = "Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge, o el formulario manual.";
+  }
+
+  // ---------- Toast ----------
+  let toastTimer = null;
+  function toast(msg, actionLabel, actionFn){
+    const el = document.getElementById("toast");
+    document.getElementById("toastMsg").textContent = msg;
+    const btn = document.getElementById("toastAction");
+    if (actionLabel && actionFn){
+      btn.textContent = actionLabel;
+      btn.style.display = "inline-block";
+      btn.onclick = actionFn;
+    } else {
+      btn.style.display = "none";
+    }
+    el.style.display = "flex";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+  function hideToast(){ document.getElementById("toast").style.display = "none"; }
+
+  // ---------- Rendering ----------
+  function render(){
+    renderList();
+    renderHistory();
+    document.getElementById("itemCount").textContent = items.length;
+  }
+
+  function renderList(){
+    const c = document.getElementById("listContainer");
+    if (items.length === 0){
+      c.innerHTML = '<div class="empty">Tu lista está vacía. Di algo como "agrega 2 kilos de arroz".</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Producto</th><th>Cant.</th><th>Unidad</th><th>Tienda</th><th></th></tr></thead><tbody>';
+    items.forEach(it => {
+      html += `<tr data-id="${it.id}">
+        <td><input type="text" value="${escapeHtml(it.product)}" data-field="product"></td>
+        <td class="qty"><input type="number" min="0" step="any" value="${it.quantity}" data-field="quantity"></td>
+        <td class="unit"><select data-field="unit">${UNITS.map(u => `<option ${u===it.unit?"selected":""}>${u}</option>`).join("")}</select></td>
+        <td class="store"><select data-field="store">
+            <option value="">—</option>
+            ${["Plaza Vea","Tottus","Metro","Wong","Vivanda","Makro","Otra"].map(s => `<option ${s===it.store?"selected":""}>${s}</option>`).join("")}
+          </select></td>
+        <td class="actions"><button class="icon" data-action="delete" title="Eliminar">🗑️</button></td>
+      </tr>`;
+    });
+    html += "</tbody></table>";
+    c.innerHTML = html;
+
+    c.querySelectorAll("tr[data-id]").forEach(row => {
+      const id = row.getAttribute("data-id");
+      row.querySelectorAll("[data-field]").forEach(input => {
+        input.addEventListener("change", () => {
+          const item = items.find(i => i.id === id);
+          if (!item) return;
+          const field = input.getAttribute("data-field");
+          if (field === "quantity") item.quantity = round2(parseFloat(input.value) || 0);
+          else if (field === "product") item.product = cleanProduct(input.value) || item.product;
+          else item[field] = input.value;
+          saveItems();
+          document.getElementById("itemCount").textContent = items.length;
+        });
+      });
+      row.querySelector('[data-action="delete"]').addEventListener("click", () => {
+        const idx = items.findIndex(i => i.id === id);
+        lastDeleted = { item: items[idx], index: idx };
+        items.splice(idx, 1);
+        saveItems(); render();
+        toast(`Eliminado: ${lastDeleted.item.product}`, "Deshacer", undoDelete);
+      });
+    });
+  }
+
+  function renderHistory(){
+    const c = document.getElementById("historyContainer");
+    if (history.length === 0){
+      c.innerHTML = '<div class="empty">Aún no has archivado ninguna semana. Di "nueva semana" para guardar tu lista actual y empezar una limpia.</div>';
+      return;
+    }
+    c.innerHTML = history.map(week => {
+      const d = new Date(week.date);
+      const label = d.toLocaleDateString("es-PE", { day: "2-digit", month: "long", year: "numeric" });
+      const rows = week.items.map(it => `
+        <div class="history-item">
+          <span>${it.quantity} ${it.unit} — ${escapeHtml(it.product)}${it.store ? ` <span class="badge">${it.store}</span>` : ""}</span>
+          <button class="icon" data-week="${week.id}" data-repeat-product="${it.id}" title="Agregar a la lista actual">➕</button>
+        </div>`).join("");
+      return `<div class="history-week"><h3>Semana del ${label}</h3>${rows}</div>`;
+    }).join("");
+
+    c.querySelectorAll("[data-repeat-product]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const weekId = btn.getAttribute("data-week");
+        const prodId = btn.getAttribute("data-repeat-product");
+        const week = history.find(w => w.id === weekId);
+        const it = week && week.items.find(i => i.id === prodId);
+        if (it){ addItemSilent(it); saveItems(); render(); toast(`Agregado: ${it.product}`); }
+      });
+    });
+  }
+
+  function escapeHtml(s){
+    return (s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ---------- Manual form & buttons ----------
+  const mUnit = document.getElementById("mUnit");
+  mUnit.innerHTML = UNITS.map(u => `<option>${u}</option>`).join("");
+
+  document.getElementById("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const product = cleanProduct(document.getElementById("mProduct").value);
+    const quantity = parseFloat(document.getElementById("mQty").value) || 1;
+    const unit = mUnit.value;
+    const store = document.getElementById("mStore").value;
+    if (!product) return;
+    addItem({ quantity, unit, product, store });
+    e.target.reset();
+    document.getElementById("mQty").value = 1;
+  });
+
+  document.getElementById("readBtn").addEventListener("click", readListAloud);
+  document.getElementById("clearBtn").addEventListener("click", clearList);
+  document.getElementById("newWeekBtn").addEventListener("click", archiveWeek);
+  document.getElementById("copyBtn").addEventListener("click", () => {
+    if (items.length === 0){ toast("La lista está vacía"); return; }
+    const text = items.map(i => `${i.quantity} ${i.unit} - ${i.product}${i.store ? " (" + i.store + ")" : ""}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => toast("Lista copiada al portapapeles"))
+      .catch(() => toast("No se pudo copiar la lista"));
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
