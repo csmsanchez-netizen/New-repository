@@ -8,10 +8,10 @@ Plaza Vea, Tottus, Metro, Wong, Vivanda, etc.
 
 ### En línea (GitHub Pages)
 
-Una vez habilitado GitHub Pages en este repositorio (ver más abajo), la app
-queda disponible en:
+GitHub Pages ya está activo en este repositorio (publica la raíz de `main`),
+así que la app queda disponible en:
 
-`https://csmsanchez-netizen.github.io/New-repository/`
+`https://csmsanchez-netizen.github.io/New-repository/voice-shopping-list/`
 
 Ábrela desde el navegador de tu celular o computadora (Chrome o Edge) y úsala
 directamente, sin instalar nada.
@@ -58,16 +58,10 @@ no se sincroniza entre dispositivos.
 
 ## Publicación en GitHub Pages
 
-El repo incluye el workflow `.github/workflows/pages.yml`, que publica
-automáticamente el contenido de esta carpeta en GitHub Pages cada vez que hay
-un cambio en `voice-shopping-list/`. Solo falta un paso manual, una única vez
-(requiere permisos de administrador del repositorio):
-
-1. En GitHub, ve a **Settings → Pages**.
-2. En "Build and deployment" → "Source", selecciona **GitHub Actions**.
-3. Listo. El workflow se ejecuta automáticamente (o dispáralo a mano desde la
-   pestaña **Actions → Deploy Voice Shopping List to GitHub Pages → Run workflow**)
-   y la app queda publicada en la URL indicada arriba.
+Este repositorio ya tenía GitHub Pages activo (Settings → Pages → "Deploy from
+a branch" → `main` → `/root`), así que no hace falta ningún paso adicional:
+cualquier cambio que se fusione a `main` dentro de `voice-shopping-list/` se
+publica solo en la URL de arriba en uno o dos minutos.
 
 ## Limitaciones conocidas
 
